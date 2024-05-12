@@ -1,0 +1,166 @@
+load("Monet.RData")
+library(fitdistrplus)
+library(ggplot2)
+
+#INFO: Code down uses data$duration to get duration if interested in saccades, use data$presac[complete.cases(data$presac)]
+
+# Determine overall distribution for data
+
+data = Monet[(Monet['inpic'] == 1) & (Monet['timestamp'] <= 30000),]
+
+# Simple distribution of fixation durations
+ggplot(data, aes(x = duration)) +
+  geom_histogram(binwidth = 20, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of fixation durations", x = "Duration (ms)", y = "Frequency")
+
+
+# Fit a Gamma distribution
+fit_gamma <- fitdist(data$duration, "gamma")
+# Summary of the fit
+summary(fit_gamma)
+# Plot the fit
+plot(fit_gamma)
+
+
+# Fit a Weibull distribution
+fit_weibull <- fitdist(data$duration, "weibull")
+# Summary of the fit
+summary(fit_weibull)
+# Plot the fit
+plot(fit_weibull)
+
+
+# Fit a Lognormal distribution
+fit_lognormal <- fitdist(data$duration, "lnorm")
+# Summary of the fit
+summary(fit_lognormal)
+# Plot the fit
+plot(fit_lognormal)
+
+
+# Fit a Exponential distribution
+fit_exp <- fitdist(data$duration, "exp")
+# Summary of the fit
+summary(fit_exp)
+# Diagnostic plots
+plot(fit_exp)
+
+
+
+# Goodness of fit statistics
+
+# Estimate quality of the fit 
+gof_gamma <- gofstat(fit_gamma)
+gof_weibull <- gofstat(fit_weibull)
+gof_lognormal <- gofstat(fit_lognormal)
+gof_exponential <- gofstat(fit_exp)
+
+gofstat(list(fit_gamma, fit_weibull, fit_lognormal, fit_exp), 
+        fitnames = c("Gamma", "Weibull", "Lognormal", "Exponential"))
+
+
+
+# Bootstrap, 95% C.I for parameters of each distribution, iterations set to 1000
+bgamma <- bootdist(fit_gamma, niter = 1000)
+bweibull <- bootdist(fit_weibull, niter = 1000)
+blognormal <- bootdist(fit_lognormal, niter = 1000)
+bexp <- bootdist(fit_exp, niter = 1000)
+
+# Summarize bootstrapping c.i results
+summary(bgamma)
+summary(bweibull)
+summary(blognormal)
+summary(bexp)
+
+
+#------------------------------------------------------------------------
+# Perform as a function instead
+
+# Determine the best distribution fit for fixation durations overall
+# Considering same distributions as above, NO bootstrap here
+
+fit_and_evaluate_distributions_overall <- function(fixation_data) {
+  
+  # Distribution types to fit
+  dist_types <- c("gamma", "weibull", "lnorm", "exp")
+  
+  # List to hold and summaries for overall data
+  overall_fits <- list()
+  
+  # Loop through each distribution
+  for (dist_type in dist_types) {
+    # Fit distribution to fixation durations
+    fit <- fitdist(fixation_data$duration, dist_type)
+    
+    # Calculate goodness of fit statistics
+    gof_stats <- gofstat(fit)
+    
+    # Store it
+    overall_fits[[dist_type]] <- list(fit = fit, gof = gof_stats)
+  }
+  
+  return(overall_fits)
+}
+
+
+# ROI_labled_Monet dataframe used from ms code, could use data as well
+overall_results <- fit_and_evaluate_distributions_overall(ROI_labled_Monet)
+
+# View summaries, goodness of fit statistics and create diagnostic plots for each distribution fit
+for(dist_type in names(overall_results)) {
+  cat("Overall Distribution: ", dist_type, "\n")
+  print(summary(overall_results[[dist_type]]$fit))
+  print(overall_results[[dist_type]]$gof)
+  
+  # Diagnostic plots for each distribution fit
+  plot(overall_results[[dist_type]]$fit)
+}
+
+
+
+
+#--------------------------------------------------------------------
+# Same as above (Overall) but also includes bootstrap for c.i etc. - Will take a bit time to run
+
+fit_evaluate_distributions_bootstrap_overall <- function(fixation_data) {
+  
+  # Distribution types to fit
+  dist_types <- c("gamma", "weibull", "lnorm", "exp")
+  
+  # List to hold, summaries and bootstrap results for overall data
+  overall_results <- list()
+  
+  # Loop through each distribution
+  for (dist_type in dist_types) {
+    # Fit distribution to fixation durations
+    fit <- fitdist(fixation_data$duration, dist_type)
+    
+    # Calculate goodness of fit statistics
+    gof_stats <- gofstat(fit)
+    
+    # Bootstrap to estimate 95% C.I for parameters, iterations set to 1000
+    bootstrap_results <- bootdist(fit, niter = 1000)
+    
+    # Store it
+    overall_results[[dist_type]] <- list(fit = fit, gof = gof_stats, bootstrap = bootstrap_results)
+  }
+  
+  return(overall_results)
+}
+
+# ROI_labled_Monet dataframe used from ms code
+overall_results <- fit_evaluate_distributions_bootstrap_overall(ROI_labled_Monet)
+
+# View summaries, goodness of fit statistics and bootstrap C.I for each distribution fit
+for(dist_type in names(overall_results)) {
+  cat("Distribution: ", dist_type, "\n")
+  print(summary(overall_results[[dist_type]]$fit))
+  print(overall_results[[dist_type]]$gof)
+  # Diagnostic plots for each distribution fit
+  plot(overall_results[[dist_type]]$fit)
+  # Summarize bootstrap results for parameters
+  print(summary(overall_results[[dist_type]]$bootstrap))
+  
+}
+
+
